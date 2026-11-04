@@ -1,0 +1,176 @@
+# Team
+
+Give one prompt to a team of AI agents and get back a finished, security-tested website. A PM writes the requirements, a researcher studies the niche, two designers and then two developers fight with a judge picking each winner, and attackers probe the result until a fixer closes every confirmed flaw. Only the winner of each stage goes forward.
+
+```text
+Your prompt
+  -> PM writes requirements.md: goals, pages, niche, constraints, acceptance criteria AC-1..n
+  -> Research writes research.md: niche, competitors, trends, two candidate stacks, facts, threats
+  -> Design fight: 2 designers with different skill kits, 1 judge, the winner makes the judge's fixes
+  -> Dev fight: 2 developers on different stacks, 1 judge who builds and runs both entries
+  -> Security: 6 attackers (auth, injection, xss, secrets, deps, access) probe the running site,
+     a verifier reproduces each finding, a fixer closes the confirmed ones, attackers re-test
+     ... until nothing confirmed is left, or the round limit (3) is reached
+  -> The winning, fixed code is applied. Documents stay in the run's docs/ folder
+```
+
+Every later stage sees only the winner of the stage before it. Judges score against the PM's acceptance criteria, after the engine runs mechanical checks: a scan for gradients (the UI rules forbid them), and the entry's own install, build and test commands from `.team/run.json`. Any agent can ask the research agent up to 3 questions and gets one more turn with the answers.
+
+## Install
+
+Needs Python 3.10+ on Linux or macOS and a logged-in `claude` CLI (`codex` optional). Nothing to install: link the skill and agents into Claude Code, then type `/team a booking site for a boutique climbing gym` in a new Claude Code session:
+
+```bash
+bin/team install
+```
+
+## From a terminal
+
+```bash
+team plan --skip research --solo dev     # stages and agent runs, runs nothing
+team run "a landing page for a bakery"   # full run in the current folder
+team status / stop / resume / report / undo / apply
+```
+
+## Options
+
+| Flag | Meaning |
+|---|---|
+| `--skip research`, `--skip design`, `--skip security` | Leave a stage out |
+| `--solo design`, `--solo dev` | One entrant instead of a fight |
+| `--angles auth,xss` | Only these attack angles |
+| `--security-rounds N` | Most attack, fix and re-test rounds |
+| `--agent host --agent codex` | Side A runs in the chat, side B on Codex |
+| `--no-apply`, `--keep`, `--no-web`, `--model`, `--at-once`, `--timeout` | As for battle, below |
+
+## Cost and safety
+
+A full default run is up to 33 agent runs: 1 PM, 1 research, 4 per fight, and 8 per security round. Developers, judges, attackers and the fixer run shell commands so they can install, build, serve and probe the site. Those commands are **not sandboxed**: the guard only limits file tools to each agent's own folder. Run it on projects and machines where that is acceptable.
+
+---
+
+# Battle: the engine underneath
+
+`team` is built on Battle, a tournament where agents fight over one task. It is included here as `/battle`.
+
+Give one task to several AI agents. Each builds its own entry, a judge picks the best one, and only that work reaches your project.
+
+By default, a battle is quick:
+
+```text
+Your prompt
+  -> 3 fighters build the task at the same time, each from a different angle
+  -> 1 judge reads every diff, picks the winner and lists fixes
+  -> The winner makes those fixes
+  -> The winner's work is applied. Everything else is thrown away
+```
+
+`--size tournament` and `--size big` run the full tournament instead, which takes much longer:
+
+```text
+Your prompt
+  -> Setup: reads free RAM, gives each group a different direction
+  -> Group fights: all groups at once, every fighter attacks every other in its group
+  -> Group judges: pick a winner in each group
+  -> Head judge: checks each verdict, can overturn it or add a runner-up
+  -> Final: group winners fight each other
+  -> 5 specialist judges score it, then the head judge picks the champion
+  -> The champion makes the head judge's fixes
+  -> Champion's work is applied. Everything else is thrown away
+```
+
+## Requirements
+
+- Python 3.10 or newer, on Linux or macOS
+- At least one agent CLI, logged in: `claude` or `codex`
+
+There is nothing to install. Run `bin/battle`, or link it onto your PATH.
+
+## Use it from Claude Code
+
+Install it once, then open a new Claude Code session:
+
+```bash
+bin/battle install
+```
+
+This links the `/battle` skill and three agent definitions into `~/.claude`. If you got Battle as a ZIP, unzip it into `~/.claude/skills/battle` and run `~/.claude/skills/battle/bin/battle install` from there. The agent definitions expect that folder name. Then type `/battle add a login page`. Put the task in the same message as `/battle`.
+
+Claude agents run as real subagents of that chat, so you see them there as a tree: a lead for each group and the final, with its fighters and judges under it. The chat has to stay open for the whole battle, and managing the agents uses some of your allowance too. Agent files are read from `~/.claude/agents` because hooks in a project's own agent files are skipped in folders you haven't trusted, and those hooks are what keep fighters in their own folders.
+
+## Use it from a terminal
+
+```bash
+battle plan --size big                  # show size and cost, runs nothing
+battle run "add a login page"           # start a battle in the current folder
+battle run --task-file task.txt --project ../my-app
+battle status                           # progress of the latest battle
+battle resume                           # continue after a usage limit
+battle stop                             # stop a running battle
+battle undo                             # put the project back
+battle apply                            # apply a champion kept out with --no-apply
+```
+
+## Sizes
+
+| Size | Groups | Fighters | Agent runs | Steps one after another |
+|---|---|---|---|---|
+| `--size default` | 1 group of 3 | 3 | about 5 | 3 |
+| `--size tournament` | 2 groups of 4 | 8 | about 29 | 9 |
+| `--size big` | 4 groups of 5 | 20 | about 57 | 9 |
+
+Time depends mostly on the steps that run one after another, because each waits for the last. The default size has 1 round and no final. The tournament sizes use 2 rounds per group and 1 round in the final, and with `/battle`, each group and the final also get a lead agent on Haiku.
+
+Rounds end early when no fighter can land an attack with evidence. Change the size with `--groups`, `--fighters`, `--rounds` and `--final-rounds`.
+
+## Which agents can fight
+
+| Agent | Flag |
+|---|---|
+| Claude Code | `--agent claude` (default in a terminal) |
+| Claude Code subagents | `--agent host` (default for `/battle`) |
+| Codex | `--agent codex` |
+| Any other CLI | `--agent "command:my-tool --flag"` |
+
+Repeat `--agent` to put different agents in the same fight. The first agent does all the judging. A custom command gets the prompt on stdin and prints its reply, and must end the reply with the JSON object the prompt asks for.
+
+## Rules
+
+Every fighter and judge follows the rulebook in [`battle/rules.md`](battle/rules.md). It covers how to build, how to research and how to judge. Fighters can attack a broken rule, and judges penalize one.
+
+The rules are about how to work, not about what is currently true. Anything that changes over time, such as library versions, APIs and security advice, is left for agents to research. Keep it that way if you edit the file, or the rules will go out of date. Edits apply to the next agent that starts.
+
+## Limits
+
+- **Memory:** all groups and fighters start at the same time. Battle allows 500 MB per agent, keeps 512 MB free, and counts free swap as well as free RAM. If that isn't enough, agents wait for a free slot. Running mostly on swap can make your computer slow, so lower it with `--at-once N`. Free memory is only read automatically on Linux and macOS.
+- **Plan usage:** every run comes from your plan's allowance, so a big battle can hit a usage limit. Battle saves after every agent run and exits with code 75, and `battle resume` continues after the limit resets. Finished work isn't redone. If an outage knocks out every fighter, the battle fails and `battle resume` gives those fighters another try.
+- **Stopping:** Ctrl-C, `kill` and closing the terminal kill every running agent at once, save finished work and set the status to `stopped`, and `battle resume` continues. The exit code is 128 plus the signal number. `kill -9` and crashes can't be caught, but every agent starts with a small tether that kills it the moment Battle's process is gone, so nothing keeps using your allowance. On Linux, a process that leaves its agent's process group is found by a mark in its environment and killed too, unless it wipes its environment. On macOS it can escape. With `--agent host` the chat has to stop its own subagents. Under `nohup`, closing the terminal doesn't stop the battle. A signal never cuts an apply or undo in half, because they finish first. If Battle dies mid-apply, no file is left half written, and `battle apply` puts the project back and applies again. `battle resume` does the same during a battle, and on a finished battle it just puts the project back. `battle undo` also still works.
+- **Time:** all groups and fighters run at the same time, but rounds run one after another, because each round needs the last round's finished work. Time depends mostly on the number of rounds and how long a fighter takes. Each agent run stops after 20 minutes by default (`--timeout`), and a fighter that runs out of time forfeits instead of starting over. `--at-once` makes agents queue, which slows a battle down a lot. Watch `log.txt` to see each fighter start and finish.
+- **Fighters only see rivals between rounds.** They get each rival's latest finished round, not live edits. Groups can't see each other until the final.
+- **Internet:** fighters and judges can search the web and read pages, so they can check official docs, best practices and known vulnerabilities. This uses more of your allowance and takes longer. Turn it off with `--no-web`.
+- **Judges read code but never run it.** By default Claude fighters can't run code either, so nobody executes the tests. Pass `--allow-bash` if you want fighters to run them.
+
+## Safety
+
+- Fighters work on copies. Your project changes only when the champion is applied.
+- Folders like `.git` and `node_modules` are not copied, so fighters can't use them. Neither are secrets such as `.env`, `*.pem` and `*.key`.
+- Symlinks that point outside your project or at a secret are not copied, and applying and undoing refuse to write through any symlink, even with `--force`. A refused apply keeps the champion, so you can remove the link and run `battle apply`.
+- Applying stops if you edited one of the same files during the battle. `battle apply --force` overwrites them.
+- `battle undo` restores the project from a backup taken just before the champion was applied.
+- Judges can't change files. Claude fighters get no shell unless you pass `--allow-bash`, and those commands are **not sandboxed**, because a copy of your project doesn't stop a command from reaching the rest of your computer. Codex fighters run shell commands inside Codex's own sandbox.
+- Claude agents don't load your MCP servers, so they can't reach your browser, memory or connected apps. They also skip the copy's project settings and `CLAUDE.md`, so hooks in a copy's `.claude/settings.json` never run, whoever wrote them. `CLAUDE.md` is still there to read.
+- Subagents share the chat's folder, so a guard hook (`bin/battle-guard`) keeps them apart. A fighter can only read and write its own copy, and a judge can only read the battle's folder. In a real test, a fighter told to write into the project and a rival's copy was blocked. If a hook can't run at all, nothing else stops a fighter, so keep the install in `~/.claude`.
+- A lead can only run `battle jobs` and `battle reply`, and can only start guarded fighters and judges. A hook enforces both, because Claude Code's own `Agent(...)` limit didn't stop a lead from starting an unguarded agent when tested.
+- `--allow-bash` and `--no-web` don't work with subagents, because the guard can't check shell commands and subagents always have web tools. `/battle` runs separate agents for those.
+- Web access is on by default, and it adds a real risk. A web page, or a rival's text, could try to trick an agent into sending your code to a website. Prompts forbid this, but that can't guarantee it, and secrets are protected only because they aren't copied. Use `--no-web` for code that must stay private.
+- Rivals write the text that judges read, so every prompt tells agents to treat that text as data, not instructions. That lowers the risk of an entry manipulating a judge but doesn't remove it. Read the champion's diff before you ship it.
+
+Each battle is stored in `~/.battle/runs/<id>/`, or under `BATTLE_HOME` if you set it, including `report.md`, `log.txt` and the champion's `changes.diff`. It also keeps a copy of your project without the skipped folders and secrets, so delete old runs to free the space.
+
+## Tests
+
+```bash
+python3 -m pytest
+```
+
+The tests use a scripted fake agent, so they spend none of your plan.

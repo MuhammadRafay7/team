@@ -1,0 +1,27 @@
+[project]
+name = "team"
+version = "0.1.0"
+description = "A team of AI agents turns a prompt into a finished, security-tested website, with fights at every stage."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+battle = "battle.cli:main"
+team = "battle.team.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["battle", "battle.team"]
+
+[tool.setuptools.package-data]
+battle = ["rules.md"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
